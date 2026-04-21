@@ -21,6 +21,9 @@ void test_blob_storage(void) {
     ObjectID id;
 
     int rc = object_write(OBJ_BLOB, content, strlen(content), &id);
+    if (rc != 0) {
+        printf("object_write failed in test_blob_storage (rc=%d)\n", rc);
+    }
     assert(rc == 0);
 
     char hex[HASH_HEX_SIZE + 1];
@@ -35,8 +38,13 @@ void test_blob_storage(void) {
     ObjectType type;
     void *data;
     size_t len;
+
     rc = object_read(&id, &type, &data, &len);
+    if (rc != 0) {
+        printf("object_read failed in test_blob_storage (rc=%d)\n", rc);
+    }
     assert(rc == 0);
+
     assert(type == OBJ_BLOB);
     assert(len == strlen(content));
     assert(memcmp(data, content, len) == 0);
@@ -49,8 +57,12 @@ void test_deduplication(void) {
     const char *content = "Duplicate content\n";
     ObjectID id1, id2;
 
-    object_write(OBJ_BLOB, content, strlen(content), &id1);
-    object_write(OBJ_BLOB, content, strlen(content), &id2);
+    int rc1 = object_write(OBJ_BLOB, content, strlen(content), &id1);
+    int rc2 = object_write(OBJ_BLOB, content, strlen(content), &id2);
+
+    if (rc1 != 0 || rc2 != 0) {
+        printf("object_write failed in test_deduplication (rc1=%d, rc2=%d)\n", rc1, rc2);
+    }
 
     assert(memcmp(&id1, &id2, sizeof(ObjectID)) == 0);
 
@@ -60,14 +72,22 @@ void test_deduplication(void) {
 void test_integrity(void) {
     const char *content = "Test integrity\n";
     ObjectID id;
-    object_write(OBJ_BLOB, content, strlen(content), &id);
+
+    int rc = object_write(OBJ_BLOB, content, strlen(content), &id);
+    if (rc != 0) {
+        printf("object_write failed in test_integrity (rc=%d)\n", rc);
+    }
 
     // Corrupt the stored file
     char path[512];
     object_path(&id, path, sizeof(path));
 
     FILE *f = fopen(path, "r+b");
+    if (f == NULL) {
+        printf("Failed to open file for corruption: %s\n", path);
+    }
     assert(f != NULL);
+
     fseek(f, 20, SEEK_SET);
     fputc('X', f);
     fclose(f);
@@ -76,8 +96,12 @@ void test_integrity(void) {
     ObjectType type;
     void *data;
     size_t len;
-    int rc = object_read(&id, &type, &data, &len);
-    assert(rc == -1);  // Must fail integrity check
+
+    rc = object_read(&id, &type, &data, &len);
+    if (rc != -1) {
+        printf("Integrity check failed, expected -1 got %d\n", rc);
+    }
+    assert(rc == -1);
 
     printf("PASS: integrity check\n");
 }
